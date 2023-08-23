@@ -1,0 +1,4 @@
+# Bluesky にアクセスするためのアカウントと App pass を設定する
+# Set up an account and App pass to access Bluesky
+export BSKY_ACCOUNT="xxxx.xxxx.xxxx"
+export BSKY_APPPASS="xxxx-xxxx-xxxx-xxxx"
