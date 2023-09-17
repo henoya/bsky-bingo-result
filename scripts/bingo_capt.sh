@@ -12,33 +12,38 @@ CMD_NAME=${CMD_PATH##*/}
 # CMD_BASE_NAME   スクリプトのファイル名からベース文字列を取得
 CMD_BASE_NAME="${CMD_PATH}"
 
-push "${cwd}" >/dev/null 2>&1
+work_dir="$(realpath "${cwd}/..")"
+bin_dir="${work_dir}/bin"
+temp_dir="${work_dir}/tmp"
+
+push "${work_dir}" >/dev/null 2>&1
 
 #. "${HOME}/.zshrc"
 
 bsky_acount="${BSKY_ACCOUNT}"
 bsky_apppass="${BSKY_APPPASS}"
 
-temp_dir="./tmp"
 if [[ ! -d "${temp_dir}" ]]; then
   mkdir -p "${temp_dir}"
 fi
-result_dir="./result"
-if [[ ! -d "${result_dir}" ]]; then
-  mkdir -p "${result_dir}"
-fi
-
-# Bingo ゲームのページのベースURL
-bing_base_uri="https://bingo.b35.jp"
-# Bingo ゲームのランキングページ
-current_ranking_page="${bing_base_uri}/view_ranking.php"
 
 # 日付文字列の取得
 today=$(date "+%Y-%m-%d")
 yesterday=$(date -v-1d "+%Y-%m-%d")
+thismonth=$(date -v-1d "+%Y%m")
 
-echo "BSKY_ACCOUNT: ${bsky_acount}"
-echo "BSKY_APPPASS: ${bsky_apppass}"
+# Bingo ゲームのページのベースURL
+bing_base_uri="https://bingo.b35.jp"
+# Bingo ゲームのランキングページ
+current_ranking_page="${bing_base_uri}/view_ranking.php?m=${thismonth}"
+
+result_this_month_dir="${thismonth}"
+result_yesterday_dir="${yesterday}"
+
+result_dir="${work_dir}/result/${result_this_month_dir}/${result_yesterday_dir}"
+if [[ ! -d "${result_dir}" ]]; then
+  mkdir -p "${result_dir}"
+fi
 
 if [[ -z "${bsky_acount}" ]]; then
   echo "BSKY_ACCOUNT is not set."
@@ -150,12 +155,12 @@ bingo_ranking_tsv="${temp_dir}/bingo_ranking.tsv"
 gawk "${scriptVariable}" "${current_ranking_file}" > "${bingo_ranking_tsv}"
 # 詳細のuriにベースを追加
 bingo_ranking_uri_file="${temp_dir}/bingo_ranking_uri.tsv"
-gawk -F'\t' 'BEGIN{OFS="\t"; l=0}{if(l==0){print $0;l=l+1;}else{printf "%s\t%s\t%s\t%s\t%s\t%s\n","'${yesterday}'",$1,$2,$3,$4,"'${bing_base_uri}'"$5; l=l+1;}}' "${temp_dir}/bingo_ranking.tsv" > "${bingo_ranking_uri_file}"
+gawk -F'\t' 'BEGIN{OFS="\t"; l=0}{if(l==0){print $0;l=l+1;}else{printf "%s\t%s\t%s\t%s\t%s\t%s\n","'${yesterday}'",$1,$2,$3,$4,"'${bing_base_uri}/'"$5; l=l+1;}}' "${temp_dir}/bingo_ranking.tsv" > "${bingo_ranking_uri_file}"
 
 # Bluesky から、昨日の結果のポスト検索
 # Bluesky にログイン
 bingo_account_handle="bingo.b35.jp"
-bsky login "${bsky_acount}" "${bsky_apppass}"
+bsky -a henoya.com  login "${bsky_acount}" "${bsky_apppass}"
 if [[ $? -ne 0 ]]; then
   echo "bsky login failed."
   exit 1
@@ -165,7 +170,7 @@ fi
 bingo_account_tl="${temp_dir}/bingo_account_tl.json"
 bingo_result_post_json="${temp_dir}/bingo_result_post.json"
 bingo_result_post_json_tmp="${bingo_result_post_json}.tmp"
-bsky tl -H "${bingo_account_handle}" -n 100 -json > "${bingo_account_tl}"
+bsky -a henoya.com  tl -H "${bingo_account_handle}" -n 100 -json > "${bingo_account_tl}"
 
 # タイムライン情報から、昨日の結果のポストを抽出
 cat "${bingo_account_tl}" | grep -E '"createdAt":"'"${yesterday}" | grep -E '\[BINGO game result]' | head -1 > "${bingo_result_post_json_tmp}"
@@ -187,7 +192,7 @@ fi
 # ポストuriからポストデータを取得
 result_post_file="${bingo_result_post_json}"
 result_post_file_tmp="${result_post_file}.tmp"
-bsky thread --json "$(cat "${post_uri_file}")" > "${result_post_file_tmp}"
+bsky -a henoya.com  thread --json "$(cat "${post_uri_file}")" > "${result_post_file_tmp}"
 if [[ -z "$(cat "${result_post_file}")" ]]; then
   echo "result_post_file is empty."
   \rm -f "${result_post_file_tmp}"
@@ -218,6 +223,12 @@ fi
 post_image_file_path_file="${post_image_file_path}.${post_image_file_path_ext}"
 
 curl -sSL "$(cat "${post_image_file_uri}")" -o "${post_image_file_path_file}"
+
+
+
+
+
+
 
 # 取得したファイルから、必要なファイルを、日付を付けてコピー
 result_bingo_ranking_url_tsv="${result_dir}/${yesterday}_bingo_ranking_url.tsv"
